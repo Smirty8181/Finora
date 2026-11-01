@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: finora
+      POSTGRES_USER: ${POSTGRES_USER:-finora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finora-local}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finora} -d finora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - finora-db:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-finora}:${POSTGRES_PASSWORD:-finora-local}@db:5432/finora
+      FAQ_PATH: /app/data/faq.json
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  finora-db:
