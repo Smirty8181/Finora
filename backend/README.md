@@ -1,8 +1,16 @@
-# Finora backend
+# Серверная часть Finora
 
-FastAPI service for the Finora FAQ assistant and staff ticket inbox. Python 3.12, SQLAlchemy 2, Alembic, and scikit-learn TF-IDF word/character similarity in `app/services/assistant.py`; common typos are corrected against the FAQ vocabulary, and short topic-only messages return relevant follow-up questions. No external language model is used. FAQ evaluation can run without staff credentials using `python -m app.evaluate_faq`.
+Backend обслуживает диалог с Новой и рабочее место службы поддержки. Сервис предоставляет HTTP API и WebSocket-соединение для чата между пользователем и сотрудником. Поиск Новы работает по локальному каталогу FAQ: внешние языковые модели не используются.
 
-## Local setup
+## Как работает Нова
+
+Вопрос сопоставляется с вариантами формулировок из `data/faq.json`. Поиск объединяет словесный TF-IDF и символьное сходство, нормализует написание и исправляет распространённые опечатки по словарю FAQ. Сообщение, состоящее только из названия темы, открывает список уточняющих вопросов; короткое продолжение может учитывать тему предыдущего сообщения.
+
+Если подходящего ответа нет, Нова просит уточнить запрос, предлагает варианты тем и сохраняет вопрос для последующей проверки. Пользователь также может передать разговор сотруднику. В таком режиме переписка в реальном времени передаётся по WebSocket.
+
+## Локальный запуск
+
+Нужны Python 3.12 и PowerShell:
 
 ```powershell
 cd backend
@@ -12,39 +20,62 @@ pip install -r requirements.txt
 $env:DATABASE_URL = "sqlite:///./finora.db"
 $env:FAQ_PATH = "..\data\faq.json"
 $env:STAFF_USERNAME = "staff"
-$env:STAFF_PASSWORD = Read-Host "Set a unique staff password (at least 12 characters)"
-$env:JWT_SECRET = Read-Host "Set a unique JWT secret (at least 32 characters)"
+$env:STAFF_PASSWORD = Read-Host "Задайте локальный пароль сотрудника (не менее 12 символов)"
+$env:JWT_SECRET = Read-Host "Задайте локальный секрет JWT (не менее 32 символов)"
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-SQLite is the default. Set `DATABASE_URL` to a SQLAlchemy URL such as `postgresql+psycopg://user:password@localhost:5432/finora` for PostgreSQL. `STAFF_USERNAME`, `STAFF_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRE_MINUTES`, `CORS_ORIGINS`, `FAQ_PATH`, and chat rate-limit settings are configurable via environment variables. `STAFF_PASSWORD` must be at least 12 characters and `JWT_SECRET` at least 32 characters; placeholder values are rejected. Set strong unique values before starting the service and do not commit them.
+Для локального запуска используется SQLite. Чтобы использовать PostgreSQL, укажите соответствующий SQLAlchemy URL в `DATABASE_URL`, например `postgresql+psycopg://user:password@localhost:5432/finora`.
 
-## API
+Через переменные окружения также настраиваются `JWT_EXPIRE_MINUTES`, `CORS_ORIGINS`, `FAQ_PATH` и лимит частоты запросов к чату. Пароль сотрудника должен содержать не менее 12 символов, JWT-секрет — не менее 32. Примеры из `.env.example` предназначены только для локальной настройки: задайте собственные значения и не публикуйте секреты.
 
-- `POST /api/chat` — `{ "message": "...", "session_id": "optional" }`; messages are limited to 500 characters.
-- `POST /api/chat/handoff` — `{ "session_id": "..." }`; creates or returns an open ticket.
-- `POST /api/staff/login` — environment-configured staff credentials; returns a JWT bearer token.
-- `GET /api/tickets`, `GET /api/tickets/{id}/messages`, `PATCH /api/tickets/{id}` and `POST /api/tickets/{id}/messages` — staff JWT required. Ticket statuses are `new`, `in_progress`, and `closed`; patch with `{"nova_answer_wrong": true}` to persist staff feedback on Nova's answer.
-- `GET /api/unanswered-questions` — staff JWT required.
-- `WS /ws/tickets/{id}?session_id=...` — client; `?token=...` — staff. Send JSON `{ "message": "..." }`.
+## API и передача диалога
 
-Ticket summaries include `last_message`; history and WebSocket messages include `text`, `content`, and `message` aliases with `sender` set to `bot`, `user`, or `staff`. When a client posts to `/api/chat` after handoff, the saved message is also broadcast to ticket WebSockets. A staff WebSocket receives a `ticket_update` status/feedback snapshot on connect, and ticket status/feedback changes are broadcast as `ticket_update` events. Closing a ticket notifies the client and prevents further replies until it is reopened. Card-like 13–19 digit sequences are fully masked before transcript or unanswered-question persistence, and the response warns the user not to share card details. Chat requests are rate limited per client IP. OpenAPI documentation is available at `/docs`.
+| Метод и путь | Назначение |
+|---|---|
+| `GET /health` | Проверка состояния сервиса. |
+| `POST /api/chat` | Вопрос Нове: `{ "message": "...", "session_id": "необязательно" }`. Максимальная длина сообщения — 500 символов. |
+| `POST /api/chat/handoff` | Создать или получить открытое обращение: `{ "session_id": "..." }`. |
+| `POST /api/staff/login` | Вход сотрудника; возвращает JWT-токен. |
+| `GET /api/tickets` | Список обращений. Нужен JWT сотрудника. |
+| `GET /api/tickets/{id}/messages` | История обращения. Нужен JWT сотрудника. |
+| `PATCH /api/tickets/{id}` | Изменить статус или отметить ответ Новы неверным. Нужен JWT сотрудника. |
+| `POST /api/tickets/{id}/messages` | Ответить в обращении. Нужен JWT сотрудника. |
+| `GET /api/unanswered-questions` | Вопросы, на которые Нова не нашла ответ. Нужен JWT сотрудника. |
+| `WS /ws/tickets/{id}?session_id=...` | WebSocket клиента; сотрудник подключается с параметром `token`. |
 
-## Tests
+Статусы обращения: `new`, `in_progress`, `closed`. Чтобы сохранить замечание к ответу Новы, отправьте `{"nova_answer_wrong": true}` в `PATCH /api/tickets/{id}`. Обновления статуса и новые сообщения передаются участникам диалога в реальном времени. Закрытое обращение нельзя продолжить, пока сотрудник снова не откроет его.
+
+Документация HTTP API и интерактивная схема OpenAPI доступны по адресу `/docs`.
+
+## Защита демонстрационных данных
+
+- Сообщения ограничены по длине и частоте запросов с одного IP.
+- Номера карт длиной 13–19 цифр маскируются до сохранения переписки или вопроса без ответа.
+- Если в сообщении обнаружен номер карты, API добавляет предупреждение не отправлять платёжные данные.
+- Панель поддержки и связанные с ней API требуют токен сотрудника.
+
+Проект не предназначен для ввода настоящих учётных, банковских или платёжных данных.
+
+## Тесты
+
+Запускайте из папки `backend`:
 
 ```powershell
 pytest
 ```
 
-The search tests check all 181 FAQ records and all 681 distinct question phrasings against the configured 0.45 cosine threshold, plus paraphrased examples and all 100 questions in the supplied product catalog. Each record has 3–6 distinct Russian question variants; informal wording and common typos are included across the catalog. API tests cover chat validation, topic suggestions and follow-up context, handoff/transcript history, staff authentication, status changes, unanswered questions, rate limiting, card redaction, and WebSocket persistence.
+Тесты проверяют обработку API и чата, подсказки, контекст диалога, передачу сотруднику, авторизацию, статусы обращений, журнал вопросов без ответа, ограничение частоты запросов, маскирование номеров карт и WebSocket-переписку.
 
-### FAQ retrieval evaluation
+FAQ-проверки охватывают 181 запись и все 681 вариант формулировок из каталога, а также вопросы из продуктового списка. Записи включают 3–6 русскоязычных формулировок, в том числе разговорные варианты и частые опечатки.
 
-Run the fixed 30-question Russian intent evaluation from `backend`:
+## Оценка поиска Новы
+
+Отдельная фиксированная проверка охватывает 30 вопросов и 16 групп намерений:
 
 ```powershell
 python -m app.evaluate_faq
 ```
 
-The evaluator compares each retrieved intent to its expected intent; below-threshold/no-match answers count as incorrect. The fixed cases use canonical question wording from the FAQ and cover sixteen intent groups, including greetings, casual conversation, assistant capabilities, and login troubleshooting. With the bundled FAQ and cosine threshold `0.45`, the measured result is **30/30 correct (100.0% intent accuracy)**. The cases are maintained in `app/evaluate_faq.py`, and `pytest` asserts all 30 expected intents. The broader catalog test separately checks every provided question; neither score guarantees correct answers to arbitrary wording.
+Для канонических вопросов FAQ при пороге сходства `0.45` текущий набор показывает результат 30 из 30. Это проверка конкретных примеров, а не гарантия точности для любых вопросов.
