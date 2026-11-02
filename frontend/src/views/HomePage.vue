@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import ChatWidget from '../components/ChatWidget.vue'
+import { APP_BASE_URL, IS_STATIC_DEMO } from '../config'
 
 const menuOpen = ref(false)
 const features = [
@@ -66,21 +67,22 @@ function resetCard(event) {
   <main>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="/" aria-label="Finora — главная"><span class="brand-mark"><Icon name="spark" :size="18" /></span>finora<span class="brand-period">.</span></a>
+        <a class="brand" :href="APP_BASE_URL" aria-label="Finora — главная"><span class="brand-mark"><Icon name="spark" :size="18" /></span>finora<span class="brand-period">.</span></a>
         <button class="mobile-menu icon-button" aria-label="Открыть меню" @click="menuOpen = !menuOpen"><Icon :name="menuOpen ? 'close' : 'menu'" /></button>
         <nav class="main-nav" :class="{ expanded: menuOpen }">
           <a href="#products" @click="menuOpen = false">Продукты</a><a href="#advantages" @click="menuOpen = false">Преимущества</a><a href="#how" @click="menuOpen = false">Как начать</a><a href="#about" @click="menuOpen = false">О Finora</a>
         </nav>
-        <a class="header-login" href="/account">Личный кабинет <Icon name="arrow" :size="16" /></a>
+        <a class="header-login" :href="`${APP_BASE_URL}account`">Личный кабинет <Icon name="arrow" :size="16" /></a>
       </div>
     </header>
 
     <section class="hero container">
       <div class="hero-copy">
         <div class="eyebrow"><span class="eyebrow-dot"></span> ДЕМО-ПРОЕКТ ВЫМЫШЛЕННОГО БАНКА</div>
+        <p v-if="IS_STATIC_DEMO" class="static-demo-notice">Статический preview: API не подключён, ответы чата локальные, все операции отключены.</p>
         <h1>Деньги любят<br />простые <span>решения.</span></h1>
         <p>Финансы могут быть понятными. В Finora всё устроено так, чтобы вы меньше думали о банке и больше — о том, что важно.</p>
-        <div class="hero-actions"><a class="button button-primary" href="/account">Открыть демо-кабинет <Icon name="arrow" :size="17" /></a><a class="button button-quiet" href="#advantages">Узнать больше <Icon name="arrow" :size="16" /></a></div>
+        <div class="hero-actions"><a class="button button-primary" :href="`${APP_BASE_URL}account`">Открыть демо-кабинет <Icon name="arrow" :size="17" /></a><a class="button button-quiet" href="#advantages">Узнать больше <Icon name="arrow" :size="16" /></a></div>
         <div class="hero-proof demo-proof"><span class="demo-proof-icon"><Icon name="shield" :size="17" /></span><div><strong>Демонстрационный проект</strong><small>Банк, продукты и все данные вымышлены</small></div></div>
       </div>
       <div class="hero-art" aria-label="Карта Finora" @pointermove="moveCard" @pointerleave="resetCard">
@@ -149,14 +151,14 @@ function resetCard(event) {
     </section>
 
     <section id="how" class="steps-section container">
-      <div class="steps-heading"><div class="eyebrow">ПОПРОБУЙТЕ ДЕМО</div><h2>Три шага —<br />и макет готов.</h2><p>Проверьте клиентский сценарий без регистрации и реальных финансовых операций.</p><a href="/account" class="text-link">Открыть демо-кабинет <Icon name="arrow" :size="16" /></a></div>
+      <div class="steps-heading"><div class="eyebrow">ПОПРОБУЙТЕ ДЕМО</div><h2>Три шага —<br />и макет готов.</h2><p>Проверьте клиентский сценарий без регистрации и реальных финансовых операций.</p><a :href="`${APP_BASE_URL}account`" class="text-link">Открыть демо-кабинет <Icon name="arrow" :size="16" /></a></div>
       <div class="steps-list"><article v-for="step in steps" :key="step.number" class="step-item"><span>{{ step.number }}</span><div><h3>{{ step.title }}</h3><p>{{ step.text }}</p></div><Icon name="chevron" :size="19" /></article></div>
     </section>
 
     <section id="start" class="cta-band container">
-      <div class="cta-shape"></div><div class="cta-content"><div class="eyebrow">ИНТЕРАКТИВНЫЙ МАКЕТ</div><h2>Посмотрите,<br />как устроена Finora.</h2><p>Проверьте интерфейс кабинета и работу чат-помощника на демонстрационных данных.</p><a class="button button-light" href="/account">Открыть демо-кабинет <Icon name="arrow" :size="17" /></a></div><div class="cta-stamp"><Icon name="spark" :size="28" /> <span>Демо-<br />проект</span></div>
+      <div class="cta-shape"></div><div class="cta-content"><div class="eyebrow">ИНТЕРАКТИВНЫЙ МАКЕТ</div><h2>Посмотрите,<br />как устроена Finora.</h2><p>Проверьте интерфейс кабинета и работу чат-помощника на демонстрационных данных.</p><a class="button button-light" :href="`${APP_BASE_URL}account`">Открыть демо-кабинет <Icon name="arrow" :size="17" /></a></div><div class="cta-stamp"><Icon name="spark" :size="28" /> <span>Демо-<br />проект</span></div>
     </section>
-    <footer id="about" class="site-footer"><div class="container footer-inner"><a class="brand" href="/"><span class="brand-mark"><Icon name="spark" :size="18" /></span>finora<span class="brand-period">.</span></a><span>Finora — демонстрационный проект. Все данные вымышлены.</span><a href="/staff">Для сотрудников <Icon name="arrow" :size="14" /></a></div></footer>
+    <footer id="about" class="site-footer"><div class="container footer-inner"><a class="brand" :href="APP_BASE_URL"><span class="brand-mark"><Icon name="spark" :size="18" /></span>finora<span class="brand-period">.</span></a><span>Finora — демонстрационный проект. Все данные вымышлены.</span><a :href="`${APP_BASE_URL}staff`">Для сотрудников <Icon name="arrow" :size="14" /></a></div></footer>
     <ChatWidget />
   </main>
 </template>

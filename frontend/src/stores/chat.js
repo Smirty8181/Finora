@@ -1,18 +1,23 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import { IS_STATIC_DEMO } from '../config'
 
-const sessionKey = 'finora_chat_session'
-const messagesKey = 'finora_chat_messages'
-const ticketKey = 'finora_chat_ticket'
-const handoffKey = 'finora_chat_handoff'
+const keySuffix = IS_STATIC_DEMO ? '_static_preview' : ''
+const sessionKey = `finora_chat_session${keySuffix}`
+const messagesKey = `finora_chat_messages${keySuffix}`
+const ticketKey = `finora_chat_ticket${keySuffix}`
+const handoffKey = `finora_chat_handoff${keySuffix}`
 const initialMessages = () => [{
   id: 'welcome',
   role: 'nova',
-  text: 'Привет! Я Нова, ваш помощник Finora. Чем могу помочь?',
+  text: IS_STATIC_DEMO
+    ? 'Это локальный демонстрационный помощник. Ответы заранее заданы, сервис Finora и его API не подключены.'
+    : 'Привет! Я Нова, ваш помощник Finora. Чем могу помочь?',
   time: new Date().toISOString(),
 }]
 
 function restoreMessages(sessionId) {
+  if (IS_STATIC_DEMO) return initialMessages()
   const saved = sessionStorage.getItem(`${messagesKey}:${sessionId}`)
   if (!saved) return initialMessages()
   try {
@@ -56,7 +61,7 @@ export const useChatStore = defineStore('chat', () => {
     const appended = { id: crypto.randomUUID(), time: new Date().toISOString(), ...message }
     messages.value.push(appended)
     messages.value = messages.value.slice(-100)
-    sessionStorage.setItem(`${messagesKey}:${sessionId.value}`, JSON.stringify(messages.value))
+    if (!IS_STATIC_DEMO) sessionStorage.setItem(`${messagesKey}:${sessionId.value}`, JSON.stringify(messages.value))
     scrollToBottom()
     if (message.role === 'nova' && speakingEnabled.value) speak(message.text)
     return appended
@@ -112,6 +117,20 @@ export const useChatStore = defineStore('chat', () => {
     }
     const outgoing = append({ role: 'client', text: message })
     loading.value = true
+    if (IS_STATIC_DEMO) {
+      const question = message.toLowerCase()
+      const answer = /что ты умеешь|как пользоваться|демо|preview/.test(question)
+        ? 'Локальный демо-ответ: здесь можно осмотреть макет и задать вопросы о его интерфейсе. Данные и сценарии не связаны с банком или реальным сервисом.'
+        : /перевод|оплат|платеж|платёж|пополн|операц/.test(question)
+          ? 'Локальный демо-ответ: переводы и платежи в этом preview отключены. Никаких финансовых операций выполнить нельзя.'
+          : /кешбэк|кэшбэк|карта|сч[её]т|баланс/.test(question)
+            ? 'Локальный демо-ответ: показанные в макете карта, баланс и продукты вымышлены и не отражают реальные предложения.'
+            : 'Локальный демо-ответ: этот статический preview не подключён к API, поэтому я могу только показать этот заранее заданный ответ.'
+      await new Promise(resolve => window.setTimeout(resolve, 300))
+      append({ role: 'nova', text: answer })
+      loading.value = false
+      return true
+    }
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -133,6 +152,10 @@ export const useChatStore = defineStore('chat', () => {
     return true
   }
   async function requestHandoff() {
+    if (IS_STATIC_DEMO) {
+      append({ role: 'system', text: 'Передача сотруднику отключена в статическом preview: рабочее место поддержки и сервер не подключены.' })
+      return
+    }
     if (handoffState.value !== 'idle') return
     handoffState.value = 'waiting'
     append({ role: 'system', text: 'Передаю диалог сотруднику. Обычно это занимает пару минут.' })
@@ -157,6 +180,7 @@ export const useChatStore = defineStore('chat', () => {
     connectTicket()
   }
   function connectTicket() {
+    if (IS_STATIC_DEMO) return
     closeSocket()
     socketState.value = 'connecting'
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -196,6 +220,7 @@ export const useChatStore = defineStore('chat', () => {
     socket.value.onclose = () => { socketState.value = 'closed' }
   }
   function resumeTicket() {
+    if (IS_STATIC_DEMO) return
     if (ticketId.value && isLive.value) connectTicket()
   }
   function closeSocket() {

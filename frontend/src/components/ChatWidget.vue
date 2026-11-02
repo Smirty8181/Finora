@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
 import Icon from './Icon.vue'
+import { IS_STATIC_DEMO } from '../config'
 
 const chat = useChatStore()
 const open = ref(false)
@@ -65,8 +66,8 @@ onBeforeUnmount(() => {
       <section v-if="open" class="chat-panel" aria-label="Чат с Новой">
         <header class="chat-head">
           <div class="nova-avatar"><Icon name="spark" :size="19" /></div>
-          <div class="chat-head-copy"><strong>Нова</strong><span><i></i>{{ chat.isLive ? (chat.handoffState === 'waiting' ? 'Ищем сотрудника' : 'Сотрудник на связи') : 'Ваш помощник Finora' }}</span></div>
-          <button class="chat-handoff-header" :disabled="chat.isLive" aria-label="Позвать сотрудника" title="Позвать сотрудника" @click="chat.requestHandoff()"><Icon name="headset" :size="14" /><span>Позвать сотрудника</span></button>
+          <div class="chat-head-copy"><strong>Нова</strong><span><i></i>{{ IS_STATIC_DEMO ? 'Локальный демо-ответ' : chat.isLive ? (chat.handoffState === 'waiting' ? 'Ищем сотрудника' : 'Сотрудник на связи') : 'Ваш помощник Finora' }}</span></div>
+          <button v-if="!IS_STATIC_DEMO" class="chat-handoff-header" :disabled="chat.isLive" aria-label="Позвать сотрудника" title="Позвать сотрудника" @click="chat.requestHandoff()"><Icon name="headset" :size="14" /><span>Позвать сотрудника</span></button>
           <button v-if="chat.ruVoiceAvailable" class="icon-button tts-button" :class="{ active: chat.speakingEnabled }" :aria-label="chat.speakingEnabled ? 'Выключить озвучивание' : 'Включить озвучивание'" @click="chat.setSpeaking(!chat.speakingEnabled)"><Icon name="sound" /></button>
           <button class="icon-button" aria-label="Закрыть чат" @click="open = false"><Icon name="close" /></button>
         </header>
@@ -84,7 +85,7 @@ onBeforeUnmount(() => {
                   <button v-for="suggestion in message.suggestions.slice(0, 6)" :key="suggestion" @click="submit(suggestion)">{{ suggestion }}</button>
                 </div>
                 <div v-if="message.role === 'nova' && isUncertain(message.text)" class="suggestion-list">
-                  <button @click="chat.requestHandoff()">Позвать сотрудника</button>
+                  <button v-if="!IS_STATIC_DEMO" @click="chat.requestHandoff()">Позвать сотрудника</button>
                 </div>
               </div>
             </article>
@@ -93,7 +94,7 @@ onBeforeUnmount(() => {
             <div class="message-avatar"><Icon name="spark" :size="14" /></div>
             <div class="typing-indicator" aria-label="Нова печатает"><i></i><i></i><i></i></div>
           </div>
-          <div v-if="chat.isLive && !chat.canSendLiveMessage" class="live-status">
+          <div v-if="!IS_STATIC_DEMO && chat.isLive && !chat.canSendLiveMessage" class="live-status">
             <span><span class="typing-dots"><i></i><i></i><i></i></span>{{ chat.socketState === 'error' || chat.socketState === 'closed' ? 'Связь с сотрудником прервалась.' : 'Подключаем защищённый чат…' }}</span>
             <button v-if="chat.socketState === 'error' || chat.socketState === 'closed'" @click="chat.reconnectTicket">Повторить подключение</button>
           </div>
@@ -101,10 +102,11 @@ onBeforeUnmount(() => {
         </div>
         <footer class="chat-compose">
           <label class="sr-only" for="chat-input">Ваше сообщение</label>
-          <textarea id="chat-input" v-model="draft" rows="1" maxlength="500" :disabled="chat.isLive && !chat.canSendLiveMessage" :placeholder="chat.isLive && !chat.canSendLiveMessage ? 'Подключаем защищённый чат…' : 'Напишите сообщение…'" @keydown="onKeydown"></textarea>
+          <textarea id="chat-input" v-model="draft" rows="1" maxlength="500" :disabled="!IS_STATIC_DEMO && chat.isLive && !chat.canSendLiveMessage" :placeholder="chat.isLive && !IS_STATIC_DEMO && !chat.canSendLiveMessage ? 'Подключаем защищённый чат…' : 'Напишите сообщение…'" @keydown="onKeydown"></textarea>
           <button class="send-button" :disabled="!draft.trim() || chat.loading || (chat.isLive && !chat.canSendLiveMessage)" aria-label="Отправить сообщение" @click="submit()"><Icon name="send" :size="18" /></button>
           <div class="compose-meta">
-            <span v-if="chat.isLive"><i class="online-dot"></i> Диалог передан сотруднику</span>
+            <span v-if="IS_STATIC_DEMO">Только локальные ответы · без подключения к API</span>
+            <span v-else-if="chat.isLive"><i class="online-dot"></i> Диалог передан сотруднику</span>
             <span v-else>Напишите Нове — она поможет разобраться</span>
             <small><Icon name="lock" :size="12" /> Не отправляйте данные карты</small>
           </div>
