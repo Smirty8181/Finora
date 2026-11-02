@@ -8,6 +8,8 @@
 
 [Возможности](#нова-помощник-по-вопросам) · [Интерфейс](#интерфейс) · [Запуск](#запуск) · [Технологии](#технологии)
 
+[![Проверки Finora](https://github.com/Smirty8181/Finora/actions/workflows/ci.yml/badge.svg)](https://github.com/Smirty8181/Finora/actions/workflows/ci.yml)
+
 </div>
 
 ---
